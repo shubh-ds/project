@@ -15,6 +15,7 @@ tqdm = "*"
 jupyterlab = "*"
 notebook = "*"
 ipykernel = "*"
+openpyxl = "*"
 
 [dev-packages]
 pytest = "*"
