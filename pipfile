@@ -4,7 +4,6 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
-numpy = "*"
 matplotlib = "*"
 pandas = "*"
 seaborn = "*"
@@ -16,6 +15,8 @@ jupyterlab = "*"
 notebook = "*"
 ipykernel = "*"
 openpyxl = "*"
+shap = "*"
+numpy = "==2.2"
 
 [dev-packages]
 pytest = "*"
