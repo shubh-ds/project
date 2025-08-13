@@ -17,6 +17,10 @@ ipykernel = "*"
 openpyxl = "*"
 shap = "*"
 numpy = "==2.2"
+xgboost = "*"
+category-encoders = "*"
+lightgbm = "*"
+catboost = "*"
 
 [dev-packages]
 pytest = "*"
