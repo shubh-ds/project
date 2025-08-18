@@ -4,7 +4,6 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
-numpy = "*"
 matplotlib = "*"
 pandas = "*"
 seaborn = "*"
@@ -15,6 +14,13 @@ tqdm = "*"
 jupyterlab = "*"
 notebook = "*"
 ipykernel = "*"
+openpyxl = "*"
+shap = "*"
+numpy = "==2.2"
+xgboost = "*"
+category-encoders = "*"
+lightgbm = "*"
+catboost = "*"
 
 [dev-packages]
 pytest = "*"
