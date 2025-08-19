@@ -21,6 +21,8 @@ xgboost = "*"
 category-encoders = "*"
 lightgbm = "*"
 catboost = "*"
+dash = "*"
+dash-bootstrap-components = "*"
 
 [dev-packages]
 pytest = "*"
