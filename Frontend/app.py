@@ -1,10 +1,4 @@
-# -*- coding: utf-8 -*-
-"""
-Real Estate Analytics Dashboard - Main Application File
-Combines price prediction and society recommendation into a single, integrated UI.
-"""
-
-# --- Section 1: Imports ---
+# Import libraries
 import dash
 import dash_bootstrap_components as dbc
 from dash import dcc, html, Input, Output, State
