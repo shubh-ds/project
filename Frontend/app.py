@@ -7,10 +7,7 @@ import numpy as np
 import joblib
 from sklearn.metrics.pairwise import cosine_similarity
 
-# --- Section 2: Load Data, Models, and Pre-computed Assets ---
-# This section runs only once when the app starts up for efficiency.
-
-print("--- Loading application assets... ---")
+# Load Data, Models, and Pre-computed Assets
 
 # Load the main dataset to populate dropdowns
 try:
@@ -37,7 +34,7 @@ except FileNotFoundError as e:
     print(f"Error loading recommender assets: {e}. Please ensure all files are present.")
     exit()
 
-# --- Section 3: Define Training Schema and Global Statistics ---
+# Define Training Schema and Global Statistics
 # Exact training columns that the pipeline expects
 X_train = pd.read_csv('Backend\\Output Files\\Price Prediction model files\\X_train_for_CatBoost.csv')
 EXPECTED_COLUMNS = X_train.columns.to_list()
@@ -59,7 +56,7 @@ AMENITY_NUM_COLS = [c for c in EXPECTED_COLUMNS
 
 # Object/categorical expected columns
 CAT_OBJECT_COLS = [c for c in EXPECTED_COLUMNS if c in df.columns and df[c].dtype == object]
-print('bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb')
+
 # Pre-compute dropdown options
 CITIES = sorted(df['City'].unique())
 AREAS = sorted(df['Area'].unique())
@@ -75,19 +72,19 @@ RECOMMENDER_FEATURES = society_profiles_scaled.columns.tolist()
 
 print("--- Application assets loaded successfully. ---")
 
-# --- Section 4: App Initialization ---
+# App Initialization
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.LUX])
 server = app.server
 
-# --- Section 5: Application Layout ---
+# Application Layout
 app.layout = dbc.Container([
-    # --- Header ---
+    # Header
     dbc.Row([
-        dbc.Col(html.H1("Mumbai & Thane Real Estate Analytics"), width=12, className="text-center my-4")
+        dbc.Col(html.H1("ML driven Real Estate Analytics"), width=12, className="text-center my-4")
     ]),
 
     dbc.Row([
-        # --- LEFT COLUMN: USER INPUTS ---
+        # LEFT COLUMN: USER INPUTS
         dbc.Col(
             dbc.Card([
                 dbc.CardHeader(html.H4("Configure Your Property")),
@@ -157,7 +154,7 @@ app.layout = dbc.Container([
             width=4
         ),
 
-        # --- RIGHT COLUMN: OUTPUTS ---
+        # RIGHT COLUMN: OUTPUTS
         dbc.Col(
             dbc.Spinner(
                 [
@@ -192,7 +189,7 @@ def update_area_options(selected_city):
     value = areas[0] if areas else None
     return options, value
 
-# --- Section 6: Backend Callback Logic ---
+# Backend Callback Logic
 @app.callback(
     Output('price-output', 'children'),
     Output('recommendation-output', 'children'),
@@ -213,28 +210,28 @@ def update_area_options(selected_city):
     ]
 )
 def update_outputs(n_clicks, city, area, prop_type, trans_type, lifespan, commercial, covered_area, bedrooms, bathrooms, balconies, house_help, store_room):
-    # --- Prevent firing on initial page load ---
+    # Prevent firing on initial page load
     if n_clicks == 0:
         return dash.no_update, dash.no_update
 
-    # --- STEP 1: HARD FILTER FOR LOCATION ---
+    # HARD FILTER FOR LOCATION
     candidate_map = society_location_map[
         (society_location_map['City'] == city) &
         (society_location_map['Area'] == area)
     ]
     candidate_list = candidate_map['Society'].tolist()
 
-    # --- STEP 2: BUILD FULL FEATURE VECTOR FOR PRICE PREDICTION ---
+    # BUILD FULL FEATURE VECTOR FOR PRICE PREDICTION
     # Build a full feature row matching training schema
     row = {col: np.nan for col in EXPECTED_COLUMNS}
 
-    # 1) Mandatory UI fields
+    # Mandatory UI fields
     row['City'] = city
     row['Area'] = area
     row['Type of Property'] = prop_type
     row['Transaction Type'] = trans_type
     row['Property Lifespan'] = lifespan
-    row['Commercial'] = commercial  # keep 'Y'/'N' if that's how training data looked
+    row['Commercial'] = commercial
     row['Covered Area'] = covered_area
     row['Bedrooms'] = bedrooms
     row['Bathrooms'] = bathrooms
@@ -242,10 +239,7 @@ def update_outputs(n_clicks, city, area, prop_type, trans_type, lifespan, commer
     row['House Help Room'] = house_help
     row['Store Room'] = store_room
 
-    # Optional UI amenities (if any later): row['Puja Room'] etc.
-    # For now, leave Puja Room / Study unspecified (will impute below)
-
-    # 2) Location-aware distances using local means within candidate_list
+    # Location-aware distances using local means within candidate_list
     if candidate_list:
         local_profiles = society_profiles.loc[[s for s in candidate_list if s in society_profiles.index]]
         for col in DIST_COLS:
@@ -254,21 +248,21 @@ def update_outputs(n_clicks, city, area, prop_type, trans_type, lifespan, commer
                 if pd.notna(val):
                     row[col] = float(val)
 
-    # 3) Numeric amenity/utilities imputation with global means
+    # Numeric amenity/utilities imputation with global means
     for col in AMENITY_NUM_COLS:
         if pd.isna(row.get(col, np.nan)):
             mean_val = GLOBAL_NUM_MEAN.get(col, np.nan)
             if pd.notna(mean_val):
                 row[col] = float(mean_val)
 
-    # 4) Fill remaining categorical/object expected fields with global mode
+    # Fill remaining categorical/object expected fields with global mode
     for col in CAT_OBJECT_COLS:
         if pd.isna(row.get(col, np.nan)):
             mode_val = GLOBAL_CAT_MODE.get(col, np.nan)
             if pd.notna(mode_val):
                 row[col] = mode_val
 
-    # 5) Handle Puja Room / Study specifically if they exist and are numeric in training
+    # Handle Puja Room / Study specifically
     for col in ['Puja Room','Study']:
         if col in EXPECTED_COLUMNS and pd.isna(row.get(col, np.nan)):
             # If numeric in training, use mean; else use mode
@@ -281,10 +275,10 @@ def update_outputs(n_clicks, city, area, prop_type, trans_type, lifespan, commer
                 if pd.notna(mode_val):
                     row[col] = mode_val
 
-    # 6) Create input DataFrame with exact columns in the right order
+    # Create input DataFrame with exact columns in the right order
     input_full = pd.DataFrame([row], columns=EXPECTED_COLUMNS)
     
-    # --- STEP 3: PRICE PREDICTION WITH CONFIDENCE INTERVALS ---
+    # PRICE PREDICTION WITH CONFIDENCE INTERVALS
     try:
         pred = price_model.predict(input_full)
         point_pred = float(np.exp(pred[0]))
@@ -302,13 +296,13 @@ def update_outputs(n_clicks, city, area, prop_type, trans_type, lifespan, commer
             html.P(f"Details: {str(e)}")
         ])
 
-    # --- STEP 4: SOCIETY RECOMMENDATION LOGIC ---
+    # SOCIETY RECOMMENDATION LOGIC
     if not candidate_list:
         recommendation_output_component = html.P("No societies found in the database for selected area to make a recommendation.")
         return price_output_component, recommendation_output_component
 
     try:
-        # Step A: Construct the User's "Ideal Property" Vector for Recommendation
+        # Construct the User's "Ideal Property" Vector for Recommendation
         # Isolate local profiles to get location-specific averages
         local_profiles = society_profiles.loc[[s for s in candidate_list if s in society_profiles.index]]
 
@@ -339,10 +333,10 @@ def update_outputs(n_clicks, city, area, prop_type, trans_type, lifespan, commer
         # Synchronize the columns exactly in same order as society_profiles
         user_vector = user_vector[RECOMMENDER_FEATURES]
         
-        # Step B: Scale the user vector
+        # Scale the user vector
         user_vector_scaled = society_scaler.transform(user_vector) 
 
-        # Step C: Calculate Similarity and Rank
+        # Calculate Similarity and Rank
         candidate_profiles_scaled = society_profiles_scaled.loc[[s for s in candidate_list if s in society_profiles_scaled.index]]
         similarity_scores = cosine_similarity(user_vector_scaled, candidate_profiles_scaled)
 
@@ -364,6 +358,6 @@ def update_outputs(n_clicks, city, area, prop_type, trans_type, lifespan, commer
 
     return price_output_component, recommendation_output_component
 
-# --- Section 7: Run the Application ---
+# Run the Application
 if __name__ == '__main__':
     app.run(debug=True)
