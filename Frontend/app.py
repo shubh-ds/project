@@ -100,10 +100,10 @@ def create_price_kde(city, area, predicted_price):
     fig.add_vline(x=predicted_price, line_dash="dash", line_color="red",
                   annotation_text=f"Prediction: ₹{predicted_price:.2f} Cr")
     fig.add_vline(x=prices_median, line_dash="dash", line_color="orange",
-                  annotation_text=f"Median")
+                  annotation_text=f"Median: ₹{prices_median:.2f} Cr", annotation_position="left")
 
     fig.update_layout(
-        title=f'Price Distribution (KDE) in {area}, {city}',
+        title=f'Price Distribution of Properties in {area}, {city}',
         xaxis_title='Price (Crores)',
         yaxis_title='Density',
         height=400
@@ -201,6 +201,11 @@ app.layout = dbc.Container([
                     dcc.Dropdown(id='area-dropdown', options=[], value=None),
                     html.Br(),
 
+                    # Commercial Radio Button
+                    dbc.Label("Looking for a Commercial Property?"),
+                    dbc.RadioItems(id='commercial-radio', options=[{'label': 'Yes', 'value': 'Y'}, {'label': 'No', 'value': 'N'}], value='N', inline=True),
+                    html.Br(),
+
                     # Property Type Dropdown
                     dbc.Label("Type of Property", html_for="prop-type-dropdown"),
                     dcc.Dropdown(id='prop-type-dropdown', options=[{'label': i, 'value': i} for i in PROPERTY_TYPES], value=PROPERTY_TYPES[0]),
@@ -213,7 +218,14 @@ app.layout = dbc.Container([
 
                     # Property Lifespan Dropdown
                     dbc.Label("Property Age", html_for="lifespan-dropdown"),
-                    dcc.Dropdown(id='lifespan-dropdown', options=[{'label': i, 'value': i} for i in PROPERTY_LIFESPANS], value=PROPERTY_LIFESPANS[0]),
+                    dcc.Dropdown(id='lifespan-dropdown', options=[
+                        {'label': 'New Construction', 'value': 'New construction'},
+                        {'label': 'Less than 5 years', 'value': 'Less than 5 years'},
+                        {'label': '5 to 10 years', 'value': '5 to 10 years'},
+                        {'label': '10 to 15 years', 'value': '10 to 15 years'},
+                        {'label': '15 to 20 years', 'value': '15 to 20 years'},
+                        {'label': 'Above 20 years', 'value': 'Above 20 years'}
+                    ], value='New construction'),
                     html.Br(),
 
                     # Covered Area Input
@@ -228,24 +240,35 @@ app.layout = dbc.Container([
 
                     # Bathrooms Dropdown
                     dbc.Label("Bathrooms", html_for="bathrooms-dropdown"),
-                    dcc.Dropdown(id='bathrooms-dropdown', options=[{'label': i, 'value': i} for i in BATHROOMS], value=BATHROOMS[0]),
+                    dcc.Dropdown(id='bathrooms-dropdown', options=[
+                        {'label': 1, 'value': 1},
+                        {'label': 2, 'value': 2},
+                        {'label': 3, 'value': 3},
+                        {'label': 4, 'value': 4},
+                        {'label': 5, 'value': 5},
+                        {'label': 6, 'value': 6},
+                        {'label': 7, 'value': 7},
+                        {'label': '7+', 'value': 10}
+                    ], value=BATHROOMS[0]),
                     html.Br(),
 
                     # Balconies Dropdown
                     dbc.Label("Balconies", html_for="balconies-dropdown"),
-                    dcc.Dropdown(id='balconies-dropdown', options=[{'label': i, 'value': i} for i in BALCONIES], value=BALCONIES[0]),
+                    dcc.Dropdown(id='balconies-dropdown', options=[
+                        {'label': '1.0', 'value': '1.0'},
+                        {'label': '2.0', 'value': '2.0'},
+                        {'label': '3.0', 'value': '3.0'},
+                        {'label': '3+', 'value': '3+'}
+                    ], value=BALCONIES[0]),
                     html.Br(),
 
                     # Binary Radio Items
-                    dbc.Label("Is it a Commercial Property?"),
-                    dbc.RadioItems(id='commercial-radio', options=[{'label': 'Yes', 'value': 'Y'}, {'label': 'No', 'value': 'N'}], value='N', inline=True),
-                    html.Br(),
 
-                    dbc.Label("House Help Room Available?"),
+                    dbc.Label("Need House Help Room?"),
                     dbc.RadioItems(id='house-help-radio', options=[{'label': 'Yes', 'value': 1}, {'label': 'No', 'value': 0}], value=0, inline=True),
                     html.Br(),
 
-                    dbc.Label("Store Room Available?"),
+                    dbc.Label("Need Store Room?"),
                     dbc.RadioItems(id='store-room-radio', options=[{'label': 'Yes', 'value': 1}, {'label': 'No', 'value': 0}], value=0, inline=True),
                     html.Br(),
 
@@ -325,7 +348,7 @@ def update_area_options(selected_city):
 )
 def update_analytics_content(active_tab, n_clicks, city, area, prop_type, trans_type, lifespan, commercial, covered_area, bedrooms, bathrooms, balconies, house_help, store_room):
     if n_clicks == 0 or not city or not area:
-        return html.P("Please make a prediction first to see analytics.")
+        return html.P("Please run the 'PRICE ANALYSIS' model first to see analytics of the selected region.")
     
     # Get predicted price (simplified - you might want to store this globally)
     try:
@@ -511,7 +534,7 @@ def update_outputs(n_clicks, city, area, prop_type, trans_type, lifespan, commer
 
     # Create input DataFrame with exact columns in the right order
     input_full = pd.DataFrame([row], columns=EXPECTED_COLUMNS)
-    
+
     # PRICE PREDICTION WITH CONFIDENCE INTERVALS
     try:
         pred = price_model.predict(input_full)
@@ -523,7 +546,7 @@ def update_outputs(n_clicks, city, area, prop_type, trans_type, lifespan, commer
             html.H3(f"Predicted Price: ₹ {point_pred:.2f} Crores", className="text-success"),
             html.P(f"95% Confidence Range: ₹ {lower_bound:.2f} Cr - ₹ {upper_bound:.2f} Cr")
         ])
-        print(price_output_component)
+        
     except Exception as e:
         price_output_component = html.Div([
             html.H5("Error in Price Prediction", className="text-danger"),
