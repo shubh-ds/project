@@ -23,6 +23,7 @@ lightgbm = "*"
 catboost = "*"
 dash = "*"
 dash-bootstrap-components = "*"
+wordcloud = "*"
 
 [dev-packages]
 pytest = "*"

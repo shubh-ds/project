@@ -6,6 +6,12 @@ import pandas as pd
 import numpy as np
 import joblib
 from sklearn.metrics.pairwise import cosine_similarity
+from scipy.stats import gaussian_kde
+from wordcloud import WordCloud
+import plotly.express as px
+import plotly.graph_objects as go
+import base64
+from io import BytesIO
 
 # Load Data, Models, and Pre-computed Assets
 
@@ -75,6 +81,102 @@ print("--- Application assets loaded successfully. ---")
 # App Initialization
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.LUX])
 server = app.server
+
+# --- Helper Functions for Visualizations ---
+def create_price_kde(city, area, predicted_price):
+    area_data = df[(df['City'] == city) & (df['Area'] == area)]
+    prices = area_data['Price (Crores)'].dropna().values
+    prices_median = area_data['Price (Crores)'].dropna().median()
+    if len(prices) < 2:
+        return html.P("Not enough data for KDE plot in selected area.")
+
+    # KDE calculation
+    kde = gaussian_kde(prices)
+    x_range = np.linspace(prices.min(), prices.max(), 200)
+    y_kde = kde(x_range)
+
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=x_range, y=y_kde, mode='lines', name='Price Density'))
+    fig.add_vline(x=predicted_price, line_dash="dash", line_color="red",
+                  annotation_text=f"Prediction: ₹{predicted_price:.2f} Cr")
+    fig.add_vline(x=prices_median, line_dash="dash", line_color="orange",
+                  annotation_text=f"Median")
+
+    fig.update_layout(
+        title=f'Price Distribution (KDE) in {area}, {city}',
+        xaxis_title='Price (Crores)',
+        yaxis_title='Density',
+        height=400
+    )
+    return dcc.Graph(figure=fig)
+
+def create_feature_comparison(city, area, user_features):
+    """Create bar chart comparing user features to area averages"""
+    area_data = df[(df['City'] == city) & (df['Area'] == area)]
+    area_data['Balconies'].replace({
+        '1.0': 1,
+        '2.0': 2,
+        '3.0': 3,
+        '3+': 4
+
+    }, inplace=True 
+    )
+    if area_data.empty:
+        return html.P("No data available for selected area.")
+    
+    # Calculate area averages
+    area_averages = {
+        'Covered Area': area_data['Covered Area'].mean()
+    }
+
+    # Create comparison data
+    features = list(area_averages.keys())
+    user_values = [user_features[f] for f in features]
+    area_values = [area_averages[f] for f in features]
+    
+    fig = go.Figure(data=[
+        go.Bar(name='Your Property', y=features, x=user_values, orientation='h', text=[f"{v:.2f}" for v in user_values], textposition='auto'),
+        go.Bar(name='Area Average', y=features, x=area_values, orientation='h', text=[f"{v:.2f}" for v in area_values], textposition='auto')
+    ])
+    
+    fig.update_layout(barmode='group', title=f'Your Property vs Area Average in {area}',
+                     height=400)
+    return dcc.Graph(figure=fig)
+
+def create_amenity_wordcloud(top_societies):
+    """Create wordcloud of amenities in top recommended societies"""
+    if not top_societies:
+        return html.P("No societies available for wordcloud.")
+    
+    # Get amenity columns (binary features)
+    amenity_cols = [col for col in society_profiles.columns 
+                   if col not in ['Commercial', 'Price (Crores)', 'Covered Area', 'Carpet Area', 'Bedrooms', 'Bathrooms', 'Balconies', 
+                                 'House Help Room', 'Store Room', 'Commercial', 'latitude', 'longitude', 'listing_count'] 
+                   and not col.startswith('dist_to_')]
+    
+    # Calculate amenity frequencies in top societies
+    top_society_data = society_profiles.loc[top_societies, amenity_cols]
+    amenity_freq = top_society_data.sum().sort_values(ascending=False)
+    
+    if amenity_freq.empty:
+        return html.P("No amenity data available.")
+    
+    # Create wordcloud
+    wordcloud_dict = dict(zip(amenity_freq.index, amenity_freq.values))
+    
+    try:
+        wordcloud = WordCloud(width=600, height=300, background_color='white').generate_from_frequencies(wordcloud_dict)
+        
+        # Convert to base64 for display
+        img = BytesIO()
+        wordcloud.to_image().save(img, format='PNG')
+        img.seek(0)
+        encoded_img = base64.b64encode(img.read()).decode()
+        
+        return html.Img(src=f"data:image/png;base64,{encoded_img}", 
+                       style={'width': '100%', 'height': 'auto'})
+    except:
+        return html.P("Error generating wordcloud.")
 
 # Application Layout
 app.layout = dbc.Container([
@@ -168,7 +270,22 @@ app.layout = dbc.Container([
                     dbc.Card([
                         dbc.CardHeader(html.H4("Top 5 Society Recommendations")),
                         dbc.CardBody(id='recommendation-output')
-                    ])
+                    ]),
+                    # Analytics Visualizations Card
+                    dbc.Card([
+                        dbc.CardHeader([
+                            html.H4("📊 Analytics Dashboard", className="mb-0",
+                                style={'color': '#ffa502', 'fontWeight': '600'})
+                        ]),
+                        dbc.CardBody([
+                            dbc.Tabs([
+                                dbc.Tab(label="Price Comparison", tab_id="price-tab"),
+                                dbc.Tab(label="Covered Area Comparison", tab_id="features-tab"),
+                                dbc.Tab(label="Common Amenities Cloud", tab_id="amenities-tab")
+                            ], id="analytics-tabs", active_tab="price-tab"),
+                            html.Div(id="analytics-content", style={'marginTop': '20px'})
+                        ])
+                    ], style={'marginTop': '20px', 'boxShadow': '0 10px 30px rgba(0,0,0,0.3)'})
                 ]
             ),
             width=8
@@ -188,6 +305,123 @@ def update_area_options(selected_city):
     options = [{'label': a, 'value': a} for a in areas]
     value = areas[0] if areas else None
     return options, value
+
+@app.callback(
+    Output('analytics-content', 'children'),
+    [Input('analytics-tabs', 'active_tab'),
+     Input('submit-button', 'n_clicks')],
+    [State('city-dropdown', 'value'),
+     State('area-dropdown', 'value'),
+     State('prop-type-dropdown', 'value'),
+     State('trans-type-dropdown', 'value'),
+     State('lifespan-dropdown', 'value'),
+     State('commercial-radio', 'value'),
+     State('area-input', 'value'),
+     State('bedrooms-dropdown', 'value'),
+     State('bathrooms-dropdown', 'value'),
+     State('balconies-dropdown', 'value'),
+     State('house-help-radio', 'value'),
+     State('store-room-radio', 'value')]
+)
+def update_analytics_content(active_tab, n_clicks, city, area, prop_type, trans_type, lifespan, commercial, covered_area, bedrooms, bathrooms, balconies, house_help, store_room):
+    if n_clicks == 0 or not city or not area:
+        return html.P("Please make a prediction first to see analytics.")
+    
+    # Get predicted price (simplified - you might want to store this globally)
+    try:
+        # HARD FILTER FOR LOCATION
+        candidate_map = society_location_map[
+            (society_location_map['City'] == city) &
+            (society_location_map['Area'] == area)
+        ]
+        candidate_list = candidate_map['Society'].tolist()
+
+        # BUILD FULL FEATURE VECTOR FOR PRICE PREDICTION
+        # Build a full feature row matching training schema
+        row = {col: np.nan for col in EXPECTED_COLUMNS}
+
+        # Mandatory UI fields
+        row['City'] = city
+        row['Area'] = area
+        row['Type of Property'] = prop_type
+        row['Transaction Type'] = trans_type
+        row['Property Lifespan'] = lifespan
+        row['Commercial'] = commercial
+        row['Covered Area'] = covered_area
+        row['Bedrooms'] = bedrooms
+        row['Bathrooms'] = bathrooms
+        row['Balconies'] = balconies
+        row['House Help Room'] = house_help
+        row['Store Room'] = store_room
+
+        # Location-aware distances using local means within candidate_list
+        if candidate_list:
+            local_profiles = society_profiles.loc[[s for s in candidate_list if s in society_profiles.index]]
+            for col in DIST_COLS:
+                if col in local_profiles.columns:
+                    val = local_profiles[col].mean()
+                    if pd.notna(val):
+                        row[col] = float(val)
+
+        # Numeric amenity/utilities imputation with global means
+        for col in AMENITY_NUM_COLS:
+            if pd.isna(row.get(col, np.nan)):
+                mean_val = GLOBAL_NUM_MEAN.get(col, np.nan)
+                if pd.notna(mean_val):
+                    row[col] = float(mean_val)
+
+        # Fill remaining categorical/object expected fields with global mode
+        for col in CAT_OBJECT_COLS:
+            if pd.isna(row.get(col, np.nan)):
+                mode_val = GLOBAL_CAT_MODE.get(col, np.nan)
+                if pd.notna(mode_val):
+                    row[col] = mode_val
+
+        # Handle Puja Room / Study specifically
+        for col in ['Puja Room','Study']:
+            if col in EXPECTED_COLUMNS and pd.isna(row.get(col, np.nan)):
+                # If numeric in training, use mean; else use mode
+                if col in df.columns and pd.api.types.is_numeric_dtype(df[col]):
+                    mean_val = GLOBAL_NUM_MEAN.get(col, np.nan)
+                    if pd.notna(mean_val):
+                        row[col] = float(mean_val)
+                else:
+                    mode_val = GLOBAL_CAT_MODE.get(col, np.nan)
+                    if pd.notna(mode_val):
+                        row[col] = mode_val
+
+        # Create input DataFrame with exact columns in the right order
+        input_full = pd.DataFrame([row], columns=EXPECTED_COLUMNS)
+        
+        # PRICE PREDICTION WITH CONFIDENCE INTERVALS
+        pred = price_model.predict(input_full)
+        predicted_price = float(np.exp(pred[0]))
+        
+        # Get all societies in selected area for wordcloud
+        candidate_map = society_location_map[
+            (society_location_map['City'] == city) &
+            (society_location_map['Area'] == area)
+        ]
+        candidate_list = candidate_map['Society'].tolist()
+        
+    except:
+        predicted_price = 1.0
+        candidate_list = []
+    
+    if active_tab == "price-tab":
+        return create_price_kde(city, area, predicted_price)
+    elif active_tab == "features-tab":
+        user_features = {
+            'Covered Area': covered_area,
+            'Bedrooms': bedrooms,
+            'Bathrooms': bathrooms,
+            'Balconies': balconies
+        }
+        return create_feature_comparison(city, area, user_features)
+    elif active_tab == "amenities-tab":
+        return create_amenity_wordcloud(candidate_list)
+    
+    return html.P("Select a tab to view analytics.")
 
 # Backend Callback Logic
 @app.callback(
@@ -286,7 +520,7 @@ def update_outputs(n_clicks, city, area, prop_type, trans_type, lifespan, commer
         upper_bound = float(np.exp(pred[0] + q_hat))
 
         price_output_component = html.Div([
-            html.H5(f"Predicted Price: ₹ {point_pred:.2f} Crores", className="text-success"),
+            html.H3(f"Predicted Price: ₹ {point_pred:.2f} Crores", className="text-success"),
             html.P(f"95% Confidence Range: ₹ {lower_bound:.2f} Cr - ₹ {upper_bound:.2f} Cr")
         ])
         print(price_output_component)
