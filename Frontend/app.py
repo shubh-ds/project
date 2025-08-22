@@ -377,7 +377,7 @@ def update_analytics_content(active_tab, n_clicks, city, area, prop_type, trans_
         row['House Help Room'] = house_help
         row['Store Room'] = store_room
 
-        # Location-aware distances using local means within candidate_list
+        # Location from POIs distances using local means within candidate_list
         if candidate_list:
             local_profiles = society_profiles.loc[[s for s in candidate_list if s in society_profiles.index]]
             for col in DIST_COLS:
