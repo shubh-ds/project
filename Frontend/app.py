@@ -13,8 +13,6 @@ import plotly.graph_objects as go
 import base64
 from io import BytesIO
 
-# Load Data, Models, and Pre-computed Assets
-
 # Load the main dataset to populate dropdowns
 try:
     df = pd.read_csv('Backend\\Output Files\\stage_6_property_data.csv')
@@ -22,12 +20,12 @@ except FileNotFoundError:
     print("Error: 'stage_6_property_data.csv' not found. Make sure it's in the same directory.")
     exit()
 
-# Load the trained price prediction model
+# Load the conformal custom regressor model
 try:
-    price_model = joblib.load('Backend\\Output Files\\Price Prediction model files\\conformal_predict_price_model_pipeline_catBoost.joblib')
+    price_model = joblib.load('Backend\\Output Files\\Price Prediction model files\\conformal_predict_price_model_pipeline_custom_regressor.joblib')
     q_hat = joblib.load('Backend\\Output Files\\Price Prediction model files\\q_hat.joblib')
 except FileNotFoundError:
-    print("Error: 'conformal_predict_price_model_pipeline_catBoost.joblib' not found.")
+    print("Error: 'conformal_predict_price_model_pipeline_custom_regressor.joblib' not found.")
     exit()
 
 # Load the assets for the recommendation engine
