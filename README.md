@@ -1,4 +1,5 @@
 # A Full-Stack Real Estate Analytics Platform for the Mumbai Market
+<img width="1915" height="981" alt="image" src="https://github.com/user-attachments/assets/881de5f7-8c04-4934-83ba-e17877657056" />
 
 ## Overview
 
